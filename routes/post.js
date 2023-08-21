@@ -9,8 +9,9 @@ const Post=mongoose.model("Post");
 router.get('/allpost',(req,res)=>{
     Post.find()
     .populate("postedBy","_id name")
-    .then(post=>{
-        res.json({post});
+    .populate("comments.postedBy","_id name")
+    .then(posts=>{
+        res.json({posts});
     }).catch(error=>{
          console.log(error);
     })
@@ -61,6 +62,93 @@ router.get("/mypost",authenticateUser,(req,res)=>{
     })
 })
 
-    
+
+//Develop a route for likes->put method on router=>/like
+
+router.put("/like",authenticateUser,async(req,res)=>{
+    try {
+        //find a post by ->id and update that post
+        const result=await Post.findByIdAndUpdate(
+            req.body.postId,
+            {$push:{likes:req.user._id}},
+            {new:true}
+        ).exec();
+        //once update is completed,lets update like post and send it on the frontend
+        res.json(result);
+    } catch (error) {
+        //error 
+        res.status(422).json({error:error})
+    }
+});
+
+
+//develop a route for unlike or dislike ->put method 
+router.put("/unlike",authenticateUser,async(req,res)=>{
+    try {
+        const result=await Post.findByIdAndUpdate(
+            req.body.postId,
+            {$pull:{likes:req.user._id}},
+            {new:true}
+        ).exec();
+
+        //update the post result and send it to frontend 
+        res.json(result);
+    } catch (error) {
+        res.status(422).json({error:error});
+    }
+});
+
+
+//create a route adding comments to post and send this response front end 
+router.put("/comment",authenticateUser,async(req,res)=>{
+    try {
+        //create a new comment object with the text and user id 
+        const comment={
+            text:req.body.text,
+            postedBy:req.user._id
+        };
+        //post by comment ->ID->add new comment->updated post 
+        const result=await Post.findByIdAndUpdate(
+            req.body.postId,
+            {$push:{comments:comment}},
+            {new:true}
+        ).populate("comments.postedBy","_id name")
+        .populate("postedBy","_id name")
+        .exec();
+        //response 
+        res.json(result);
+        
+    } catch (error) {
+        res.status(422).json({error:error});
+    }
+})
+
+
+
+//create a route with endpoint ->deletePost with postId
+router.delete("/deletepost/:postId",authenticateUser,async(req,res)=>{
+    try {
+        //
+        const post=await Post.findOne({_id:req.params.postId})
+        .populate("postedBy","_id")
+        .exec();
+        //in case if no post is available 
+        if(!post){
+            return res.status(422).json({error:err});
+        }
+        //check if the user who made the post is same as the user who is trying to delete post
+        if(post.postedBy._id.toString()===req.user._id.toString()){
+            //if user is same ->remove the post 
+            const result=await post.deleteOne();
+            res.json(result);
+        }
+ 
+    } catch (error) {
+        console.log(error);
+    }
+})
+
+
+  
 
 module.exports=router;

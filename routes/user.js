@@ -2,6 +2,7 @@ const express=require('express');
 const router=express.Router();
 const mongoose=require("mongoose");
 const User=mongoose.model("User");
+const Post=mongoose.model("Post");
 const bcrypt=require('bcryptjs');//import of bcrypt
 const jwt=require('jsonwebtoken');
 const {JWT_SECRET}=require("../keys.js");
@@ -59,7 +60,7 @@ router.post("/signup",(req,res)=>{
 
 
 //Router to handle http request-post for sign
-router.post("/signin",authenticateUser,(req,res)=>{
+router.post("/signin",(req,res)=>{
     //get the email id and password from req.body
     const {email,password}=req.body;
     if(!email||!password){
@@ -91,5 +92,26 @@ router.post("/signin",authenticateUser,(req,res)=>{
         console.log(error);
     })
 });
+
+
+router.get("/user/:id", authenticateUser, async (req, res) => {
+    try {
+        const user = await User.findOne({ _id: req.params.id }).select('-password');
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const posts = await Post.find({ postedBy: req.params.id })
+            .populate('postedBy', '_id name')
+            .exec();
+
+        res.json({ user, posts });
+    } catch (err) {
+        return res.status(422).json({ error: err.message });
+    }
+});
+
+
 
 module.exports=router;
