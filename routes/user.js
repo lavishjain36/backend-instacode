@@ -93,25 +93,109 @@ router.post("/signin",(req,res)=>{
     })
 });
 
+//TO observe profile of other user 
 
-router.get("/user/:id", authenticateUser, async (req, res) => {
+router.get("/user/:id",authenticateUser,async(req,res)=>{
     try {
-        const user = await User.findOne({ _id: req.params.id }).select('-password');
-        
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+        // Find ther user from db ->user ,exclude password 
+        const user=await User.findOne({_id:req.params.id}).select("-password");
+        //no user is found with that id ,send 404
+        if(!user){
+            return res.status(404).json({error:"User not found"});
+
         }
+        //Find all post by user with id 
+        const posts=await Post.find({postedBy:req.params.id})
+        .populate('postedBy','_id name')
+        .exec();
 
-        const posts = await Post.find({ postedBy: req.params.id })
-            .populate('postedBy', '_id name')
-            .exec();
-
-        res.json({ user, posts });
-    } catch (err) {
-        return res.status(422).json({ error: err.message });
+        //send the response 
+        res.json({user,posts})
+        
+    } catch (error) {
+        return res.status(422).json({error:error.message})
     }
+})
+
+//create a route to follow other user
+router.put("/follow",authenticateUser,async(req,res)=>{
+
+    try {
+          //first->we have to know the id of the user whom we want to follow
+    const followedUser=await User.findByIdAndUpdate(
+        req.body.followId,
+        {$push:{followers:req.user._id}},
+        {new:true}
+    );
+    //error
+    if(err){
+        return res.status(422).json({error:err});
+    }
+
+    //second->we hae to know the id of the user who is following
+    const followingUser=await User.findByIdAndUpdate(
+        req.user._id, 
+        {$push:{following:req.body.followId}},
+        {new:true}
+    ).select("-password");
+
+    //send response to user with updated information about a person they followed.
+    res.json(followedUser,followingUser)
+    } catch (error) {
+        return res.status(422).json({error:err});
+    }
+  
 });
 
 
+
+//create a Logic to unfollow user
+router.put("/unfollow",authenticateUser,async(req,res)=>{
+    try {
+    //first->we have to know the id of the user whom we want to follow
+    const unfollowedUser=await User.findByIdAndUpdate(
+        req.body.unfollowId, 
+        {$pull:{followers:req.user._id}},
+        {new:true}
+    );
+
+    //error 
+    if(err){
+        return res.status(422).json({error:err});
+    }
+
+
+    const unfollowingUser=await User.findByIdAndUpdate(
+        req.user._id,
+        {$pull:{following:req.body.unfollowId}},
+        {new:true}
+
+    ).select("-password");
+
+    //send a response to user about person they unfollowed.
+    res.json(unfollowingUser);
+        
+    } catch (error) {
+        return res.status(422).json({error:err})
+    }
+})
+
+
+//someone want to search a user->route->searchuser with user data 
+
+router.post("/searchUser",async(req,res)=>{
+    try {
+        //create a regex pattern match the user query.
+        let userpattern=new RegExp("^"+req.body.query)
+        
+        //search a user User Schema for user whose email matches with the pattern 
+        const users=await User.find({email:{$regex:userpattern}})
+
+        //send a response 
+        res.json({users});
+    } catch (error) {
+        return res.status(422).json({error:err});
+    }
+})
 
 module.exports=router;
